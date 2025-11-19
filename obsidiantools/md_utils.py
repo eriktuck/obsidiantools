@@ -373,11 +373,20 @@ def _get_all_wikilinks_and_embedded_files(src_txt: str) -> list[str]:
     return link_matches_list
 
 
-def _remove_aliases_from_wikilink_regex_matches(link_matches_list: list[str]) -> list[str]:
-    return [(i.replace('\\', '')
-             .split("|")[0].rstrip()  # catch alias/alt-text
-             .split('#', 1)[0])  # catch links to headers
-            for i in link_matches_list]
+def _remove_aliases_from_wikilink_regex_matches(
+    link_matches_list: list[str]
+) -> list[str]:
+    """
+    Remove .md suffix, header fragments, and alias text.
+    """
+    cleaned = [
+        i.replace("\\", "")          # backslashes from Obsidian escaping
+         .split("|", 1)[0]           # drop alias
+         .split("#", 1)[0]           # drop header
+         .removesuffix(".md")        # drop .md
+        for i in link_matches_list
+    ]
+    return [c for c in cleaned if c]  # filter out any empties
 
 
 def _get_all_wikilinks_from_source_text(src_txt: str, *,
@@ -391,9 +400,6 @@ def _get_all_wikilinks_from_source_text(src_txt: str, *,
         link_matches_list = _remove_aliases_from_wikilink_regex_matches(
             link_matches_list)
 
-    # remove .md:
-    link_matches_list = [name.removesuffix('.md')
-                         for name in link_matches_list]
     if exclude_canvas:
         link_matches_list = [n for n in link_matches_list
                              if not n.endswith('.canvas')]
