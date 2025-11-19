@@ -1161,7 +1161,7 @@ class Vault:
     def _create_note_metadata_columns(self,
                                       df: pd.DataFrame) -> pd.DataFrame:
         """pipe func for mutating df"""
-        df['rel_filepath'] = [self._md_file_index.get(f, np.NaN)
+        df['rel_filepath'] = [self._md_file_index.get(f, np.nan)
                               for f in df.index.tolist()]
         df['abs_filepath'] = np.where(df['rel_filepath'].notna(),
                                       [self._dirpath / str(f)
