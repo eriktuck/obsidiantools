@@ -1,88 +1,63 @@
 from pathlib import Path
 from glob import glob
+from typing import Iterable, List, Optional
 import numpy as np
 
 
-def get_relpaths_from_dir(dir_path: Path, *, extension: str) -> list[Path]:
-    """Get list of relative paths for {extension} files in a given directory,
-    including any subdirectories.
-
-    Thus if the vault directory is the argument, then the function returns
-    a list of all the {extension} files found in the vault.
-
-    Args:
-        dir_path (pathlib Path): Path object representing the directory
-            to search.
-        extension (str): file extension like 'md' or 'canvas'.
-
-    Returns:
-        list of Path objects
+def get_relpaths_from_dir(dir_path: Path, *, extension: str) -> List[Path]:
     """
-    relpaths_list = [Path(p).relative_to(dir_path)
-                     for p in glob(f"{dir_path}/**/*.{extension}",
-                     recursive=True)]
-    return relpaths_list
-
-
-def get_relpaths_matching_subdirs(dir_path: Path, *,
-                                  extension: str,
-                                  include_subdirs: list = None,
-                                  include_root: bool = True) -> list[Path]:
-    """Get list of relative paths for {extension} files in a given directory,
-    filtered to include specified subdirectories (with include_subdirs
-    kwarg).  The default arguments align with get_relpaths_from_dir
-    function, but this function enables more flexibility.
-
-    For example, if you had a vault with folders named by category, and
-    filter them like this in Obsidian:
-        path:Category1/ OR path:Category2/ OR path:Category4/
-    then you can use the include_subdirs kwarg to do that with this function:
-        include_subdirs = ['Category1', 'Category2', 'Category4']
-
-    You can also specify deeper levels to filter on, e.g.:
-        include_subdirs = ['Category1/TopicA', 'Category1/TopicB']
-
-    Args:
-        dir_path (pathlib Path): Path object representing the directory
-            to search.
-        extension (str): file extension like 'md' or 'canvas'.
-        include_subdirs (list, optional): list of string paths to include
-            in the filtered list of md files (e.g. ['p1', 'p2', 'p3/sp1']).
-            If no list is specified, then no filtering is done on paths.
-            Defaults to None.
-        include_root (bool, optional): include files that are directly in
-            the dir_path (root dir).  Defaults to True.
-
-    Returns:
-        list of Path objects
+    Return *relative* paths of every file with the given extension that
+    lives under ``dir_path`` (recursively).
     """
-    # Obsidian's 'shortest path' for files uses forward slash across
-    # operating systems, so as_posix() is used to yield paths with
-    # forward slash consistently here.
+    return [
+        p.relative_to(dir_path) 
+        for p in dir_path.rglob(f'*.{extension}') 
+        if p.is_file()
+    ]
 
-    if include_subdirs:
-        include_subdirs_final = [str(Path(i).as_posix())
-                                 for i in include_subdirs]
 
-    if not include_subdirs and include_root:
-        return get_relpaths_from_dir(dir_path,
-                                     extension=extension)
-    elif not include_subdirs and not include_root:
-        return [i for i in get_relpaths_from_dir(dir_path,
-                                                 extension=extension)
-                if str(i.parent.as_posix()) != '.']
-    else:
-        if include_root:
-            return [i for i in get_relpaths_from_dir(dir_path,
-                                                     extension=extension)
-                    if str(i.parent.as_posix())
-                    in include_subdirs_final + ['.']]
-        else:
-            return [i for i in get_relpaths_from_dir(dir_path,
-                                                     extension=extension)
-                    if str(i.parent.as_posix())
-                    in include_subdirs_final]
+def get_relpaths_matching_subdirs(
+    dir_path: Path,
+    *,
+    extension: str,
+    include_subdirs: Optional[Iterable[str]] = None,
+    include_root: bool = True,
+) -> List[Path]:
+    """
+    Like ``get_relpaths_from_dir`` but keep only the files whose *immediate
+    parent directory* is listed in ``include_subdirs``.
 
+    ``include_subdirs`` may contain paths such as::
+
+        ['Category1', 'Category1/TopicA', 'Category2']
+
+    All paths are interpreted **relative to ``dir_path``**.
+
+    Setting ``include_subdirs=None`` means “include *all* sub-dirs”.
+    ``include_root`` controls whether files that sit directly in ``dir_path``
+    itself are kept.
+    """
+    all_rel = get_relpaths_from_dir(dir_path, extension=extension)
+
+    if not include_subdirs:
+        return (
+            all_rel
+            if include_root
+            else [p for p in all_rel if p.parent != Path(".")]
+        )
+
+    allowed_dirs = [Path(s).with_suffix("").relative_to(".") for s in include_subdirs]
+
+    def _in_allowed_tree(path: Path) -> bool:
+        """True if the file lives in / under one of the allowed dirs."""
+        parent = path.parent
+        return any(parent == d or parent.is_relative_to(d) for d in allowed_dirs)
+
+    return [
+        p
+        for p in all_rel
+        if (include_root and p.parent == Path(".")) or _in_allowed_tree(p)
+    ]
 
 def _get_valid_filepaths_by_ext_set(dirpath: Path, *,
                                     exts: set[str]):
